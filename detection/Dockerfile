@@ -30,6 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip3 install --no-cache-dir --upgrade 'numpy>=1.22,<2' \
  && pip3 install --no-cache-dir pycuda
 
+# yolo26s.onnx is exported once from yolo26s.pt via ultralytics and committed
+# to the repo. Doing this in a builder stage would pull torch (~700 MB wheel,
+# ~2 GB installed) into the balenaCloud builder and OOM the arm64 build job.
+# To re-export: `cd detection && uv run --with 'ultralytics>=8.3.0' --no-project
+#                -- yolo export model=yolo26s.pt format=onnx imgsz=640 opset=17
+#                simplify=True`
+COPY yolo26s.onnx /opt/models/yolo26s.onnx
+
 COPY detect_node.py /app/detect_node.py
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

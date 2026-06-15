@@ -1,1 +1,4 @@
 .claude/
+# yolo26s.onnx is committed (used at build); the .pt is the upstream artifact
+# we exported from — keep it local, don't bloat the repo.
+detection/yolo26s.pt

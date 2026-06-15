@@ -29,5 +29,7 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 8765
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["ros2", "run", "foxglove_bridge", "foxglove_bridge", "--ros-args", \
-     "-p", "port:=8765", "-p", "address:=0.0.0.0"]
+# entrypoint.sh launches foxglove_bridge directly; it reads
+# FOXGLOVE_REMOTE_ACCESS and FOXGLOVE_DEVICE_TOKEN env vars to decide whether
+# to enable the cloud relay (both optional, defaults to local-only :8765).
+CMD []
