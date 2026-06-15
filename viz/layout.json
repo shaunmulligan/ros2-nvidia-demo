@@ -1,0 +1,79 @@
+{
+  "configById": {
+    "Image!camera": {
+      "topic": "/detectnet/overlay/compressed",
+      "mode": "fit",
+      "synchronize": false,
+      "transformMarkers": false,
+      "cameraState": {},
+      "followTf": null,
+      "smooth": false
+    },
+    "Indicator!count": {
+      "path": "/presence/count.data",
+      "style": "background",
+      "fallbackColor": "#ef4444",
+      "fallbackLabel": "many people",
+      "rules": [
+        { "operator": "=", "rawValue": "0", "color": "#22c55e", "label": "empty" },
+        { "operator": "=", "rawValue": "1", "color": "#f59e0b", "label": "1 person" },
+        { "operator": "=", "rawValue": "2", "color": "#f97316", "label": "2 people" },
+        { "operator": "=", "rawValue": "3", "color": "#ef4444", "label": "3 people" },
+        { "operator": "=", "rawValue": "4", "color": "#ef4444", "label": "4 people" },
+        { "operator": "=", "rawValue": "5", "color": "#ef4444", "label": "5 people" }
+      ]
+    },
+    "Plot!count_over_time": {
+      "paths": [
+        {
+          "value": "/presence/count.data",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "people in frame",
+          "color": "#3b82f6"
+        }
+      ],
+      "minYValue": 0,
+      "maxYValue": 5,
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "xAxisVal": "timestamp",
+      "isSynced": true,
+      "title": "/presence/count over time (sees debounce smoothing)"
+    },
+    "StateTransitions!events": {
+      "paths": [
+        {
+          "value": "/presence/events.data",
+          "timestampMethod": "receiveTime",
+          "label": "presence"
+        }
+      ],
+      "isSynced": true,
+      "showPoints": false
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": {
+      "direction": "column",
+      "first": "Image!camera",
+      "second": "Plot!count_over_time",
+      "splitPercentage": 65
+    },
+    "second": {
+      "direction": "column",
+      "first": "Indicator!count",
+      "second": "StateTransitions!events",
+      "splitPercentage": 35
+    },
+    "splitPercentage": 65
+  }
+}

@@ -1,0 +1,63 @@
+# ROS2 Humble demo: CSI camera -> TensorRT detection -> presence logic -> Foxglove
+version: "2.1"
+
+services:
+  camera:
+    build: ./camera
+    image: ros2-demo/camera:0.2.0
+    runtime: nvidia
+    labels:
+      io.balena.features.argus-socket: "1"
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_DOMAIN_ID: "42"
+    networks:
+      - rosnet
+    restart: unless-stopped
+
+  detection:
+    build: ./detection
+    image: ros2-demo/detection:0.2.0
+    runtime: nvidia
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_DOMAIN_ID: "42"
+    volumes:
+      - trt-cache:/usr/local/bin/networks
+    networks:
+      - rosnet
+    depends_on:
+      - camera
+    restart: unless-stopped
+
+  logic:
+    build: ./logic
+    image: ros2-demo/logic:0.2.0
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_DOMAIN_ID: "42"
+    networks:
+      - rosnet
+    depends_on:
+      - detection
+    restart: unless-stopped
+
+  viz:
+    build: ./viz
+    image: ros2-demo/viz:0.2.0
+    environment:
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_DOMAIN_ID: "42"
+    ports:
+      - "8765:8765"
+    networks:
+      - rosnet
+    restart: unless-stopped
+
+networks:
+  rosnet:
+    driver: bridge
+
+volumes:
+  trt-cache:
+
