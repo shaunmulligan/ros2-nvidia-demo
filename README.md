@@ -25,21 +25,32 @@ camera (gscam2, CSI)  →  detection (detectnet, TensorRT)  →  logic (presence
 
 ## Deploy
 
-Currently needs to be deployed with v24 CLI and `balena deploy` only as `runtime` field is blocked by newer versions.
+Currently needs to be deployed with v24 CLI and `balena deploy` only as `runtime` field is blocked by newer versions. The first push for this will take a while, it took about 1 hour or so to fully upload the images via `deploy`, so be patient. If you want to iterate on it, it's much faster using a device in localMode and `balena push <DEVICE_IP>`.
 
-The detection image bakes in `yolo26s.onnx` (exported from `yolo26s.pt` via
-ultralytics during a discardable docker build stage). The **first** detection
-start still takes several minutes while TensorRT builds the FP16 engine from
-that ONNX; the engine is cached in the `trt-cache` named volume so subsequent
-starts are fast.
+The detection image bakes in `yolo26s.onnx` (exported from `yolo26s.pt` via ultralytics during a discardable docker build stage). The **first** detection start still takes several minutes while TensorRT builds the FP16 engine from that ONNX; the engine is cached in the `trt-cache` named volume so subsequent starts are fast.
 
 ## Connecting Foxglove
 
+### Local network
 In [Foxglove Studio](https://foxglove.dev/download) on your laptop or via the web interface setup:
 *Open connection → Foxglove WebSocket →* `ws://<jetson-ip>:8765`.
 
+### Remote access (cloud relay)
+foxglove_bridge ships a `remote_access` gateway that connects outbound to
+Foxglove's platform — no inbound port, no VPN required. To enable, set these
+two env vars on the device (balena device or fleet variables):
+
+| Variable                | Value                                                                 |
+|-------------------------|-----------------------------------------------------------------------|
+| `FOXGLOVE_REMOTE_ACCESS`| `true`                                                                |
+| `FOXGLOVE_DEVICE_TOKEN` | Token from [foxglove.dev → Devices → Create Device Token](https://app.foxglove.dev/) |
+
+Restart the `viz` service; the device then shows up under your Foxglove org's
+Devices list and can be opened from any browser.
+
 Useful panels: Image (`/image_raw` or `/detectnet/overlay`), Raw Messages
 (`/detectnet/detections`, `/presence/events`), Plot (`/presence/count`).
+System stats (CPU/RAM) stream on `/foxglove_bridge/sysinfo`.
 
 ## Gotchas
 

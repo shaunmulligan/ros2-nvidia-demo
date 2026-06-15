@@ -44,10 +44,16 @@ services:
 
   viz:
     build: ./viz
-    image: ros2-demo/viz:0.2.0
+    image: ros2-demo/viz:0.3.0
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_DOMAIN_ID: "42"
+      # Set to "true" (via balena device/fleet variables) to enable the
+      # foxglove_bridge cloud relay — no inbound port required, viewable from
+      # any Foxglove client signed into the same org. Also requires
+      # FOXGLOVE_DEVICE_TOKEN (foxglove.dev → Devices → Create Device Token).
+      FOXGLOVE_REMOTE_ACCESS: ""
+      FOXGLOVE_DEVICE_TOKEN: ""
     ports:
       - "8765:8765"
     networks:
