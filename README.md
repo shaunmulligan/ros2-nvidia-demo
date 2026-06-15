@@ -1,9 +1,8 @@
 # ROS2 Person-Presence Demo — Jetson Orin Nano (CSI IMX219)
 
-Four-container ROS 2 Humble pipeline on plain docker-compose, all built on
+Four-container ROS 2 Humble pipeline on docker-compose, all built on
 NVIDIA's official `nvcr.io/nvidia/l4t-jetpack:r36.4.0` base (Ubuntu 22.04
-jammy). Architecture is unchanged from the original Jazzy plan — we'll migrate
-to Jazzy when JetPack 7.2 lands on Orin (Ubuntu 24.04 noble).
+jammy). We'll migrate to ROS2 Jazzy when JetPack 7.2 lands on Orin (Ubuntu 24.04 noble).
 
 ```
 camera (gscam2, CSI)  →  detection (detectnet, TensorRT)  →  logic (presence events)
@@ -19,35 +18,22 @@ camera (gscam2, CSI)  →  detection (detectnet, TensorRT)  →  logic (presence
 
 ## Prerequisites on the Jetson
 
-- JetPack 6.x (L4T r36.4.x), IMX219 CSI camera connected and enumerated
-- `nvargus-daemon` running on the host (default on stock JetPack): `systemctl status nvargus-daemon`
-- NVIDIA container runtime configured for Docker (`docker info | grep nvidia`)
-- docker compose v2
+- JetPack 6.x (L4T r36.4.x), IMX219 CSI camera connected and enumerated by running the right dtbo
+- Proof of Concept balenaOS running supervisor and host-extensions that support:
+  - `nvargus-daemon` running on the host 
+  - NVIDIA container runtime configured for balena-engine 
 
-## Bring-up order
+## Deploy
 
-Bring the camera up **alone** first — it validates the argus socket mount before
-anything else is built:
-
-```bash
-docker compose up --build camera
-# in another shell:
-docker compose exec camera bash -c "ros2 topic hz /image_raw"   # expect ~30 Hz
-```
-
-Then the rest:
-
-```bash
-docker compose up --build -d
-```
+Currently needs to be deployed with v24 CLI and `balena deploy` only as `runtime` field is blocked by newer versions.
 
 The **first** detection start takes several minutes while TensorRT builds the
-engine for ssd-mobilenet-v2. The engine is cached in the `trt-cache` named
+engine. The engine is cached in the `trt-cache` named
 volume; subsequent starts are fast.
 
 ## Connecting Foxglove
 
-In [Foxglove Studio](https://foxglove.dev/download) on your laptop:
+In [Foxglove Studio](https://foxglove.dev/download) on your laptop or via the web interface setup:
 *Open connection → Foxglove WebSocket →* `ws://<jetson-ip>:8765`.
 
 Useful panels: Image (`/image_raw` or `/detectnet/overlay`), Raw Messages
@@ -59,10 +45,9 @@ Useful panels: Image (`/image_raw` or `/detectnet/overlay`), Raw Messages
   `nvargus-daemon` through `/tmp/argus_socket` (bind-mounted in compose). If the
   camera container logs `Failed to create CaptureSession`, check the daemon is
   running on the host and restart it: `sudo systemctl restart nvargus-daemon`.
-- **TRT first run**: engine build takes minutes and looks like a hang — watch
-  `docker compose logs -f detection`. Deleting the `trt-cache` volume forces a rebuild.
+- **TRT first run**: engine build takes minutes and looks like a hang — watch. Deleting the `trt-cache` volume forces a rebuild.
 - **CycloneDDS / RMW**: every service sets `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`
-  and `ROS_DOMAIN_ID=42` (YAML anchor in compose). FastDDS shared-memory transport
+  and `ROS_DOMAIN_ID=42`. FastDDS shared-memory transport
   breaks across container boundaries, and nodes on different RMWs fail discovery
   *silently* — if a topic list looks empty, check these two env vars first.
 - **No host networking**: containers discover each other via multicast on the
@@ -71,6 +56,3 @@ Useful panels: Image (`/image_raw` or `/detectnet/overlay`), Raw Messages
 - **ROS distro: Humble (jammy)**, not Jazzy (noble). Reason: JetPack 6.x has no
   clean Jazzy story — see notes in this repo's design history. Migration to
   Jazzy is planned when JetPack 7.2 ships Ubuntu 24.04 noble on Orin.
-
----
-*Co-authored with Claude*
