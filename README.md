@@ -27,9 +27,11 @@ camera (gscam2, CSI)  →  detection (detectnet, TensorRT)  →  logic (presence
 
 Currently needs to be deployed with v24 CLI and `balena deploy` only as `runtime` field is blocked by newer versions.
 
-The **first** detection start takes several minutes while TensorRT builds the
-engine. The engine is cached in the `trt-cache` named
-volume; subsequent starts are fast.
+The detection image bakes in `yolo26s.onnx` (exported from `yolo26s.pt` via
+ultralytics during a discardable docker build stage). The **first** detection
+start still takes several minutes while TensorRT builds the FP16 engine from
+that ONNX; the engine is cached in the `trt-cache` named volume so subsequent
+starts are fast.
 
 ## Connecting Foxglove
 

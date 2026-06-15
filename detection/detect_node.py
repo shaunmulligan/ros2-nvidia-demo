@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-# YOLOv5n object detection via TensorRT, publishing vision_msgs/Detection2DArray.
+# YOLO26s object detection via TensorRT, publishing vision_msgs/Detection2DArray.
 #
 # Subscribes: /image_raw         (sensor_msgs/Image, rgb8)
 # Publishes:  /detectnet/detections (vision_msgs/Detection2DArray)
 #             /detectnet/overlay    (sensor_msgs/Image, rgb8)
 #
-# On first run, downloads yolov5n.onnx and builds an FP16 TensorRT engine into
-# /usr/local/bin/networks/yolov5n/ (mounted as a named volume so the engine
-# survives restarts — first-run engine build takes several minutes).
+# The ONNX is baked into the image at /opt/models/yolo26s.onnx (exported from
+# yolo26s.pt during docker build). On first run we build an FP16 TensorRT engine
+# at /usr/local/bin/networks/yolo26s/yolo26s.fp16.engine — that path is on the
+# trt-cache named volume so the engine survives container restarts.
 
 import os
+import shutil
 import sys
-import urllib.request
 
 import numpy as np
 import cv2
@@ -28,13 +29,12 @@ import tensorrt as trt
 import pycuda.driver as cuda
 import pycuda.autoinit  # noqa: F401 — initializes the CUDA context as a side-effect
 
-MODEL_URL = "https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5n.onnx"
-NETWORKS_DIR = "/usr/local/bin/networks/yolov5n"
-ONNX_PATH = f"{NETWORKS_DIR}/yolov5n.onnx"
-ENGINE_PATH = f"{NETWORKS_DIR}/yolov5n.fp16.engine"
+BUNDLED_ONNX = "/opt/models/yolo26s.onnx"
+NETWORKS_DIR = "/usr/local/bin/networks/yolo26s"
+ONNX_PATH = f"{NETWORKS_DIR}/yolo26s.onnx"
+ENGINE_PATH = f"{NETWORKS_DIR}/yolo26s.fp16.engine"
 INPUT_HW = 640
 CONF_DEFAULT = 0.4
-IOU_THRESHOLD = 0.45
 
 COCO_CLASSES = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
@@ -66,7 +66,7 @@ def build_engine(onnx_path: str, engine_path: str) -> None:
             raise RuntimeError(f"ONNX parse failed:\n{errs}")
     config = builder.create_builder_config()
     # Orin Nano has 8 GB shared CPU/GPU memory; with the camera service running
-    # we can't afford a 1 GiB workspace. 256 MiB is enough for yolov5n FP16.
+    # we can't afford a 1 GiB workspace. 256 MiB is enough for yolo26s FP16.
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 28)
     if builder.platform_has_fast_fp16:
         config.set_flag(trt.BuilderFlag.FP16)
@@ -80,8 +80,7 @@ def build_engine(onnx_path: str, engine_path: str) -> None:
 def ensure_engine() -> None:
     os.makedirs(NETWORKS_DIR, exist_ok=True)
     if not os.path.exists(ONNX_PATH):
-        print(f"[detect_node] downloading {MODEL_URL}", flush=True)
-        urllib.request.urlretrieve(MODEL_URL, ONNX_PATH)
+        shutil.copyfile(BUNDLED_ONNX, ONNX_PATH)
     if not os.path.exists(ENGINE_PATH):
         print("[detect_node] building TensorRT engine (first run, ~minutes)",
               flush=True)
@@ -120,9 +119,6 @@ class YoloDetect(Node):
         self.output_shape = tuple(self.engine.get_tensor_shape(self.output_name))
         self.trt_context.set_input_shape(self.input_name, self.input_shape)
 
-        # I/O tensor dtypes are set by the ONNX/engine — Ultralytics yolov5n.onnx
-        # combined with our FP16 build flag yields FP16 I/O on TRT 10. Buffer dtype
-        # must match or every other half-float will be read as garbage (NaN).
         def _np_dtype(trt_dt):
             return {
                 trt.DataType.FLOAT: np.float32,
@@ -147,7 +143,7 @@ class YoloDetect(Node):
             CompressedImage, '/detectnet/overlay/compressed', 10)
         self.create_subscription(Image, '/image_raw', self.on_image, 10)
         self.get_logger().info(
-            f"yolov5n detect ready (input {self.input_shape}, "
+            f"yolo26s detect ready (input {self.input_shape}, "
             f"output {self.output_shape})")
 
     def on_image(self, msg: Image) -> None:
@@ -155,7 +151,6 @@ class YoloDetect(Node):
         h0, w0 = img.shape[:2]
         padded, scale, (dx, dy) = letterbox(img)
         nchw = padded.transpose(2, 0, 1)[np.newaxis].astype(np.float32) / 255.0
-        # cast to whatever the engine I/O wants (FP16 for Ultralytics yolov5n)
         nchw = np.ascontiguousarray(nchw.astype(self.in_np_dtype))
 
         cuda.memcpy_htod_async(self.d_input, nchw, self.stream)
@@ -163,51 +158,33 @@ class YoloDetect(Node):
         cuda.memcpy_dtoh_async(self.h_output, self.d_output, self.stream)
         self.stream.synchronize()
 
-        # yolov5 output: (1, 25200, 85). 85 = 4 (cx,cy,w,h in 640-space)
-        # + 1 objectness + 80 class scores. No transpose needed.
-        # cast back to FP32 for downstream math (NMS expects FP32)
+        # YOLO26 end2end head output: (1, 300, 6) already NMS-filtered.
+        # Each row: [x1, y1, x2, y2, conf, class_idx] in 640-pixel input space.
+        # Rows past the true detection count are zero-padded — the confidence
+        # threshold below filters them out alongside low-score detections.
         preds = self.h_output[0].astype(np.float32)
-        boxes_xywh = preds[:, :4]
-        obj_score = preds[:, 4]
-        class_scores = preds[:, 5:]
-        class_ids = class_scores.argmax(axis=1)
-        class_conf = class_scores.max(axis=1)
-        confs = obj_score * class_conf  # combined confidence (standard YOLOv5)
+        boxes_xyxy = preds[:, :4]
+        confs = preds[:, 4]
+        class_ids = preds[:, 5].astype(np.int32)
 
         threshold = float(self.get_parameter('threshold').value)
         mask = confs > threshold
-        boxes_xywh = boxes_xywh[mask]
+        boxes_xyxy = boxes_xyxy[mask].copy()
         confs = confs[mask]
         class_ids = class_ids[mask]
-        if len(boxes_xywh) == 0:
+        if len(boxes_xyxy) == 0:
             self._publish(msg.header, [], img)
             return
 
-        # xywh-center → xyxy in original image space
-        xy = boxes_xywh[:, :2]
-        wh = boxes_xywh[:, 2:]
-        boxes_xyxy = np.concatenate([xy - wh / 2, xy + wh / 2], axis=1)
+        # Undo letterbox: 640-space -> original image pixel space.
         boxes_xyxy[:, [0, 2]] = (boxes_xyxy[:, [0, 2]] - dx) / scale
         boxes_xyxy[:, [1, 3]] = (boxes_xyxy[:, [1, 3]] - dy) / scale
         boxes_xyxy[:, [0, 2]] = boxes_xyxy[:, [0, 2]].clip(0, w0)
         boxes_xyxy[:, [1, 3]] = boxes_xyxy[:, [1, 3]].clip(0, h0)
 
-        # NMS expects (x, y, w, h) integer-ish boxes
-        nms_boxes = np.column_stack([
-            boxes_xyxy[:, 0], boxes_xyxy[:, 1],
-            boxes_xyxy[:, 2] - boxes_xyxy[:, 0],
-            boxes_xyxy[:, 3] - boxes_xyxy[:, 1],
-        ]).tolist()
-        keep = cv2.dnn.NMSBoxes(
-            nms_boxes, confs.tolist(), threshold, IOU_THRESHOLD)
-        if len(keep) == 0:
-            self._publish(msg.header, [], img)
-            return
-        keep = (keep.flatten().tolist()
-                if hasattr(keep, 'flatten') else list(keep))
-
         detections = [
-            (boxes_xyxy[i], float(confs[i]), int(class_ids[i])) for i in keep
+            (boxes_xyxy[i], float(confs[i]), int(class_ids[i]))
+            for i in range(len(boxes_xyxy))
         ]
         self._publish(msg.header, detections, img)
 
@@ -236,7 +213,6 @@ class YoloDetect(Node):
         ov_msg = self.bridge.cv2_to_imgmsg(overlay, encoding='rgb8')
         ov_msg.header = header
         self.overlay_pub.publish(ov_msg)
-        # JPEG-encoded sibling. cv2 expects BGR for imencode; we have RGB.
         bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
         ok, jpeg = cv2.imencode('.jpg', bgr, [cv2.IMWRITE_JPEG_QUALITY, 75])
         if ok:

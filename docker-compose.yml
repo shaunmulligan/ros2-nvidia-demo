@@ -17,7 +17,7 @@ services:
 
   detection:
     build: ./detection
-    image: ros2-demo/detection:0.2.0
+    image: ros2-demo/detection:0.3.0
     runtime: nvidia
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
