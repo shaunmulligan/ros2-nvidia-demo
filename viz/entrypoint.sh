@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 
 # Build foxglove_bridge ROS args from env. FOXGLOVE_REMOTE_ACCESS=true enables
 # the cloud relay (no inbound port needed) and requires FOXGLOVE_DEVICE_TOKEN

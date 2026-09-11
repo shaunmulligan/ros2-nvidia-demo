@@ -1,13 +1,15 @@
-# ROS2 Humble demo: CSI camera -> TensorRT detection -> presence logic -> Foxglove
+# ROS2 Jazzy demo: CSI camera -> TensorRT detection -> presence logic -> Foxglove
 version: "2.1"
 
 services:
   camera:
-    build: ./camera
-    image: ros2-demo/camera:0.2.0
+    build:
+      context: .
+      target: camera
+    image: ros2-demo/camera:0.3.0
     runtime: nvidia
-    labels:
-      io.balena.features.argus-socket: "1"
+    volumes:
+      - /tmp/argus_socket:/tmp/argus_socket
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_DOMAIN_ID: "42"
@@ -16,8 +18,10 @@ services:
     restart: unless-stopped
 
   detection:
-    build: ./detection
-    image: ros2-demo/detection:0.3.0
+    build:
+      context: .
+      target: detection
+    image: ros2-demo/detection:0.4.0
     runtime: nvidia
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
@@ -32,7 +36,7 @@ services:
 
   logic:
     build: ./logic
-    image: ros2-demo/logic:0.2.0
+    image: ros2-demo/logic:0.3.0
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_DOMAIN_ID: "42"
@@ -44,7 +48,7 @@ services:
 
   viz:
     build: ./viz
-    image: ros2-demo/viz:0.3.0
+    image: ros2-demo/viz:0.4.0
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_DOMAIN_ID: "42"

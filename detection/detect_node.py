@@ -32,7 +32,9 @@ import pycuda.autoinit  # noqa: F401 — initializes the CUDA context as a side-
 BUNDLED_ONNX = "/opt/models/yolo26s.onnx"
 NETWORKS_DIR = "/usr/local/bin/networks/yolo26s"
 ONNX_PATH = f"{NETWORKS_DIR}/yolo26s.onnx"
-ENGINE_PATH = f"{NETWORKS_DIR}/yolo26s.fp16.engine"
+# TRT version in the name: the trt-cache volume outlives releases and an engine
+# serialized by an older TensorRT does not deserialize under a newer one.
+ENGINE_PATH = f"{NETWORKS_DIR}/yolo26s.fp16.trt{trt.__version__}.engine"
 INPUT_HW = 640
 CONF_DEFAULT = 0.4
 
