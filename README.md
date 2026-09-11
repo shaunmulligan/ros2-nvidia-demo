@@ -33,9 +33,13 @@ The root `Dockerfile` installs the Jetson pieces from the L4T r39.2 apt repo
 (`repo.download.nvidia.com/jetson/common`), following
 [NVIDIA's public recipe](https://gitlab.com/nvidia/container-images/l4t-jetpack).
 
+There is no separate base image and nothing to build by hand. `base` is an
+internal stage of the same `Dockerfile`; `balena deploy` builds it as part of
+each service that uses it.
+
 | Stage       | Adds on top of the previous                                              | Compressed |
 |-------------|---------------------------------------------------------------------------|------------|
-| `base`      | noble, ROS Jazzy `ros-base`, CycloneDDS, L4T + ROS apt repos. No CUDA.     | —          |
+| `base`      | noble, ROS Jazzy `ros-base`, CycloneDDS, L4T + ROS apt repos. No CUDA. Internal only. | — |
 | `camera`    | GStreamer plugins, unpacked `nvidia-l4t-gstreamer` (`nvarguscamerasrc`, `nvvidconv`), gscam. No CUDA. | ~0.5 GB |
 | `detection` | `cuda-cudart-13-2`, `libcurand-13-2`, TensorRT 10.16 runtime + Python bindings, OpenCV, pycuda (built from source). | ~2.9 GB |
 
@@ -44,7 +48,7 @@ trimmed after a first cut with the full CUDA library set weighed 11.7 GB per
 image. Compose points `camera` and `detection` at the same `Dockerfile` with
 different `build.target` values; `logic` and `viz` keep their own Dockerfiles.
 
-Build a single stage locally:
+Optional, for local iteration only: build one stage with plain Docker.
 
 ```bash
 docker build --target camera -t ros2-demo/camera:dev .
