@@ -1,0 +1,6 @@
+# balena CLI applies this single root file to the whole project tree (paths
+# relative to this directory), so do not list service subdirectories here.
+.git
+*.png
+*.pt
+*.md
