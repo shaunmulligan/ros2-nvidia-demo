@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 source /opt/ros/jazzy/setup.bash
+# balena_supervisor_msgs, built in the Dockerfile; foxglove_bridge needs its
+# type support on the ament path to advertise the supervisor node's topics.
+source /ros2_ws/install/setup.bash
 
 # Build foxglove_bridge ROS args from env. FOXGLOVE_REMOTE_ACCESS=true enables
 # the cloud relay (no inbound port needed) and requires FOXGLOVE_DEVICE_TOKEN

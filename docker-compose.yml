@@ -2,6 +2,27 @@
 version: "2.1"
 
 services:
+  balena-supervisor-node:
+    # <arch> is aarch64 or amd64; write it out for the devices in this fleet
+    image: bh.cr/balenasolutions/ros-balena-supervisor-jazzy-aarch64/0.1.0
+    restart: always
+    labels:
+      io.balena.features.supervisor-api: '1'
+    environment:
+      # The block's upstream README defaults to rmw_fastrtps_cpp on domain 0.
+      # Both must match the rest of the graph or the node starts cleanly and is
+      # never discovered, with no error on either side.
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_DOMAIN_ID: "42"
+      # Destructive services stay hidden unless switched on -- see Configuration
+      SUPERVISOR_NODE_ENABLE_POWER_CONTROL: 'false'
+    networks:
+      # Not the upstream `network_mode: host`: CycloneDDS auto-selects a single
+      # interface, and on the host netns that is eth0/wlan0, never the rosnet
+      # bridge. The supervisor-api label makes the supervisor attach this
+      # service to its own `supervisor0` network on top of this one, so
+      # BALENA_SUPERVISOR_ADDRESS still resolves off host networking.
+      - rosnet
   camera:
     build:
       context: .
@@ -48,7 +69,7 @@ services:
 
   viz:
     build: ./viz
-    image: ros2-demo/viz:0.4.0
+    image: ros2-demo/viz:0.5.0
     environment:
       RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
       ROS_DOMAIN_ID: "42"
